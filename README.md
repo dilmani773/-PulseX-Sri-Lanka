@@ -368,6 +368,3 @@ MIT License - see LICENSE file for details
 - [Information Theory Primer](https://www.inference.org.uk/itprnn/book.pdf)
 
 ---
-
-**Last Updated**: December 2024
-**Version**: 1.0.0
