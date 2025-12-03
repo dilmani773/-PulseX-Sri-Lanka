@@ -337,9 +337,10 @@ MIT License - see LICENSE file for details
 
 ## 👥 Team - NovaX
  __*From Peradeniya Engineering Faculty*__
-**SURIYAPPERUMA H.D. - E/21/453**
-**MADHUSHAN S.K.A.K. - E/21/245**
-**THENNAKOON T.M.I.I.C. - E/21/407**
+ 
+- **SURIYAPPERUMA H.D. - E/21/453**
+- **MADHUSHAN S.K.A.K. - E/21/245**
+- **THENNAKOON T.M.I.I.C. - E/21/407**
 
 
 **Developed for ModelX Data Science Competition**
