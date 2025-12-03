@@ -59,7 +59,7 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/pulsex-sri-lanka.git
+git clone https://github.com/dilmani773/pulsex-sri-lanka.git
 cd pulsex-sri-lanka
 
 # Create virtual environment
@@ -244,23 +244,6 @@ P(Risk | Evidence) ∝ P(Evidence | Risk) × P(Risk)
 
 ---
 
-## 🎥 Demo Video Script
-
-**Title**: "PulseX Sri Lanka - Real-Time Business Intelligence"
-
-**Sections**:
-1. **Problem** (15s): Sri Lankan businesses need real-time awareness
-2. **Solution** (30s): Multi-source data → ML analysis → Actionable insights
-3. **Technical Demo** (60s):
-   - Data ingestion from multiple sources
-   - Feature engineering visualization
-   - Anomaly detection in action
-   - Risk scoring process
-   - Dashboard walkthrough
-4. **Impact** (15s): Faster decisions, reduced risk, competitive advantage
-
----
-
 ## 🏆 Competition Advantages
 
 ### 1. Mathematical Sophistication
@@ -352,7 +335,12 @@ MIT License - see LICENSE file for details
 
 ---
 
-## 👥 Team
+## 👥 Team - NovaX
+ __*From Peradeniya Engineering Faculty*__
+**SURIYAPPERUMA H.D. - E/21/453**
+**MADHUSHAN S.K.A.K. - E/21/245**
+**THENNAKOON T.M.I.I.C. - E/21/407**
+
 
 **Developed for ModelX Data Science Competition**
 
