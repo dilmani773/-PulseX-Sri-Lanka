@@ -20,7 +20,7 @@ from config import (
     DATA_CONFIG, MODEL_CONFIG, DB_CONFIG, 
     RAW_DATA_DIR, PROCESSED_DATA_DIR, MODELS_DIR
 )
-from data_ingestion.news_scraper import NewsScraperEngine
+from data_ingestion.new_scraper import NewsScraperEngine
 from preprocessing.feature_extractor import AdvancedFeatureExtractor
 from models.anomaly_detector import HybridAnomalyDetector
 from models.risk_scorer import BayesianRiskScorer, RiskLevel

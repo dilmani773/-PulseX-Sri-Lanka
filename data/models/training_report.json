@@ -1,0 +1,29 @@
+{
+  "training_completed_at": "2025-12-03T18:48:21.065901",
+  "training_data": {
+    "samples": 1096,
+    "features": 15,
+    "date_range": {
+      "start": "2022-12-04T00:00:00",
+      "end": "2025-12-03T00:00:00"
+    }
+  },
+  "models": {
+    "anomaly_detector": {
+      "type": "Hybrid Ensemble",
+      "saved_to": "C:\\Users\\WW\\Documents\\modelX final round try 2\\data\\models\\anomaly_detector.pkl"
+    },
+    "risk_scorer": {
+      "type": "Bayesian",
+      "saved_to": "C:\\Users\\WW\\Documents\\modelX final round try 2\\data\\models\\risk_scorer.pkl"
+    },
+    "sentiment_analyzer": {
+      "type": "Rule-based",
+      "note": "No training required"
+    },
+    "trend_analyzer": {
+      "type": "Statistical",
+      "note": "No training required"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "generated_at": "2025-12-03T18:43:16.790296",
+  "years_back": 3,
+  "start_date": "2022-12-04T18:43:10.822211",
+  "end_date": "2025-12-03T18:43:10.822224",
+  "total_articles": 54750,
+  "total_days": 1096,
+  "sources": [
+    "Colombo Gazette",
+    "Sunday Times",
+    "Hiru News",
+    "News First",
+    "Daily Mirror",
+    "The Island",
+    "Ada Derana"
+  ],
+  "categories": [
+    "Health",
+    "Energy",
+    "Political",
+    "Education",
+    "Agriculture",
+    "Tourism",
+    "Technology",
+    "Infrastructure",
+    "Environment",
+    "Economic",
+    "Transportation",
+    "Social"
+  ]
+}

@@ -5,7 +5,10 @@ Implements adaptive scraping with rate limiting and error handling
 
 import asyncio
 import aiohttp
-from bs4 import BeautifulSoup
+try:
+    from bs4 import BeautifulSoup
+except Exception:
+    BeautifulSoup = None
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 import hashlib
@@ -81,26 +84,43 @@ class NewsScraperEngine:
     def extract_ada_derana(self, html: str, source: Dict) -> List[NewsArticle]:
         """Extract articles from Ada Derana"""
         articles = []
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Find article containers (adapt selectors as needed)
-        article_blocks = soup.find_all('div', class_=['news-story', 'article-item'])
+        if BeautifulSoup is not None:
+            soup = BeautifulSoup(html, 'html.parser')
+            # Find article containers (adapt selectors as needed)
+            article_blocks = soup.find_all('div', class_=['news-story', 'article-item'])
+        else:
+            # Fallback: find <h2>/<h3>/<a> blocks heuristically
+            article_blocks = re.findall(r'(<(?:div|article)[^>]*>.*?<h[23][^>]*>.*?</(?:div|article)>)', html, flags=re.S)
         
         for block in article_blocks[:20]:  # Limit to 20 articles
             try:
-                title_elem = block.find(['h2', 'h3', 'a'])
-                if not title_elem:
-                    continue
-                
-                title = title_elem.get_text(strip=True)
-                link = title_elem.get('href') or block.find('a')['href']
+                if BeautifulSoup is not None:
+                    title_elem = block.find(['h2', 'h3', 'a'])
+                    if not title_elem:
+                        continue
+                    title = title_elem.get_text(strip=True)
+                    link = title_elem.get('href') or (block.find('a')['href'] if block.find('a') else '')
+                else:
+                    # regex fallback
+                    m = re.search(r'<h[23][^>]*>\s*<a[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', block, flags=re.S)
+                    if not m:
+                        m = re.search(r'<a[^>]*href=["\']([^"\']+)["\'][^>]*>(.{10,200})</a>', block, flags=re.S)
+                    if not m:
+                        continue
+                    link = m.group(1)
+                    title = re.sub(r'<[^>]+>', '', m.group(2)).strip()
                 
                 if not link.startswith('http'):
                     link = source['url'] + link
                 
                 # Extract snippet/content
-                content_elem = block.find(['p', 'div'], class_=['summary', 'description'])
-                content = content_elem.get_text(strip=True) if content_elem else title
+                if BeautifulSoup is not None:
+                    content_elem = block.find(['p', 'div'], class_=['summary', 'description'])
+                    content = content_elem.get_text(strip=True) if content_elem else title
+                else:
+                    # fallback: take nearby paragraph or title
+                    p = re.search(r'<p[^>]*>(.*?)</p>', block, flags=re.S)
+                    content = re.sub(r'<[^>]+>', '', p.group(1)).strip() if p else title
                 
                 article = NewsArticle(
                     id=self.generate_article_id(title, link),
@@ -124,29 +144,39 @@ class NewsScraperEngine:
     def extract_daily_mirror(self, html: str, source: Dict) -> List[NewsArticle]:
         """Extract articles from Daily Mirror"""
         articles = []
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Adapt selectors based on actual website structure
-        article_blocks = soup.find_all(['article', 'div'], class_=['post', 'article'])
+        if BeautifulSoup is not None:
+            soup = BeautifulSoup(html, 'html.parser')
+            # Adapt selectors based on actual website structure
+            article_blocks = soup.find_all(['article', 'div'], class_=['post', 'article'])
+        else:
+            article_blocks = re.findall(r'(<(?:article|div)[^>]*>(?:.|\n)*?</(?:article|div)>)', html, flags=re.S)
         
         for block in article_blocks[:20]:
             try:
-                title_elem = block.find(['h2', 'h3', 'h4'])
-                if not title_elem:
-                    continue
-                
-                title = title_elem.get_text(strip=True)
-                link_elem = title_elem.find('a') or block.find('a')
-                
-                if not link_elem:
-                    continue
-                
-                link = link_elem.get('href')
+                if BeautifulSoup is not None:
+                    title_elem = block.find(['h2', 'h3', 'h4'])
+                    if not title_elem:
+                        continue
+                    title = title_elem.get_text(strip=True)
+                    link_elem = title_elem.find('a') or block.find('a')
+                    if not link_elem:
+                        continue
+                    link = link_elem.get('href')
+                else:
+                    m = re.search(r'<h[2-4][^>]*>\s*(?:<a[^>]*href=["\']([^"\']+)["\'][^>]*>)?(.*?)</(?:a>)?</h[2-4]>', block, flags=re.S)
+                    if not m:
+                        continue
+                    link = m.group(1) if m.group(1) else ''
+                    title = re.sub(r'<[^>]+>', '', m.group(2)).strip()
                 if not link.startswith('http'):
                     link = source['url'] + link
                 
-                content_elem = block.find('p')
-                content = content_elem.get_text(strip=True) if content_elem else title
+                if BeautifulSoup is not None:
+                    content_elem = block.find('p')
+                    content = content_elem.get_text(strip=True) if content_elem else title
+                else:
+                    p = re.search(r'<p[^>]*>(.*?)</p>', block, flags=re.S)
+                    content = re.sub(r'<[^>]+>', '', p.group(1)).strip() if p else title
                 
                 article = NewsArticle(
                     id=self.generate_article_id(title, link),
@@ -170,27 +200,34 @@ class NewsScraperEngine:
     def generic_extractor(self, html: str, source: Dict) -> List[NewsArticle]:
         """Generic extractor for any news website"""
         articles = []
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Find all links that look like articles
-        potential_links = soup.find_all('a', href=True)
+        if BeautifulSoup is not None:
+            soup = BeautifulSoup(html, 'html.parser')
+            # Find all links that look like articles
+            potential_links = soup.find_all('a', href=True)
+        else:
+            potential_links = re.findall(r'<a[^>]*href=["\']([^"\']+)["\'][^>]*>(.{10,200}?)</a>', html, flags=re.S)
         
         seen_titles = set()
         
         for link in potential_links:
             try:
-                title = link.get_text(strip=True)
-                
-                # Filter out navigation links, etc.
-                if len(title) < 20 or len(title) > 200:
-                    continue
-                
-                if title in seen_titles:
-                    continue
-                
-                seen_titles.add(title)
-                
-                url = link['href']
+                if BeautifulSoup is not None:
+                    title = link.get_text(strip=True)
+                    # Filter out navigation links, etc.
+                    if len(title) < 20 or len(title) > 200:
+                        continue
+                    if title in seen_titles:
+                        continue
+                    seen_titles.add(title)
+                    url = link['href']
+                else:
+                    url = link[0]
+                    title = re.sub(r'<[^>]+>', '', link[1]).strip()
+                    if len(title) < 20 or len(title) > 200:
+                        continue
+                    if title in seen_titles:
+                        continue
+                    seen_titles.add(title)
                 if not url.startswith('http'):
                     url = source['url'] + url
                 

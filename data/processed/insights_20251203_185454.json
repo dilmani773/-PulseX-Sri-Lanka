@@ -1,0 +1,95 @@
+{
+  "timestamp": "2025-12-03T18:54:54.416664",
+  "summary": {
+    "total_articles": 39,
+    "sources": 2,
+    "time_span_hours": 0.00018635416666666667,
+    "avg_sentiment": 0.07236572444444613
+  },
+  "risk_overview": {
+    "current_risk": 0.5845370047872852,
+    "risk_level": "medium",
+    "high_risk_periods": 0
+  },
+  "anomalies": {
+    "detected": 0,
+    "severity": "low"
+  },
+  "trending_topics": [
+    {
+      "topic": "Lanka",
+      "volume": 11,
+      "articles": 6,
+      "sentiment": 0.12943577293111572,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "Sports",
+      "volume": 6,
+      "articles": 3,
+      "sentiment": 0.027454316453415784,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "Disaster",
+      "volume": 6,
+      "articles": 3,
+      "sentiment": 0.8317931407359623,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "Home",
+      "volume": 6,
+      "articles": 3,
+      "sentiment": -0.0849606498148503,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "Hiru",
+      "volume": 6,
+      "articles": 2,
+      "sentiment": 0.36987356137446536,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "After",
+      "volume": 4,
+      "articles": 2,
+      "sentiment": -0.7801003347354193,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "Relief",
+      "volume": 4,
+      "articles": 2,
+      "sentiment": 0.01652932775947058,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "Aircraft",
+      "volume": 4,
+      "articles": 2,
+      "sentiment": 0.01652932775947058,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "Cyclone",
+      "volume": 4,
+      "articles": 2,
+      "sentiment": -0.3188632282464766,
+      "trend": "\u2192"
+    },
+    {
+      "topic": "Local",
+      "volume": 4,
+      "articles": 2,
+      "sentiment": -0.2666089142010344,
+      "trend": "\u2192"
+    }
+  ],
+  "recommendations": [
+    "\u26a1 Moderate concern - stay vigilant",
+    "\ud83d\udccb Review contingency plans",
+    "\ud83d\udc65 Brief key stakeholders"
+  ]
+}
