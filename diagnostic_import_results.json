@@ -1,0 +1,10 @@
+{
+  "economic_api": "import error: No module named 'dotenv'",
+  "news_scraper": "import error: No module named 'aiohttp'",
+  "social_monitor": "import error: No module named 'aiohttp'",
+  "weather_events": "ok",
+  "sentiment_engine": "ok",
+  "trend_analyzer": "ok",
+  "risk_scorer": "ok",
+  "anomaly_detector": "ok"
+}
