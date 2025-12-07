@@ -15,13 +15,6 @@ def metric_card(title: str, value: str, delta: Optional[str] = None,
                 delta_color: str = "normal", icon: str = "📊"):
     """
     Display a metric card with title, value, and optional delta
-    
-    Args:
-        title: Metric title
-        value: Main value to display
-        delta: Optional change indicator
-        delta_color: 'normal', 'inverse', or 'off'
-        icon: Emoji icon
     """
     col1, col2 = st.columns([1, 5])
     with col1:
@@ -33,18 +26,13 @@ def metric_card(title: str, value: str, delta: Optional[str] = None,
 
 def alert_box(message: str, alert_type: str = "info", dismissible: bool = False):
     """
-    Display an alert box
-    
-    Args:
-        message: Alert message
-        alert_type: 'success', 'info', 'warning', 'error'
-        dismissible: Whether alert can be dismissed
+    Display an alert box with High Contrast Colors
     """
     colors = {
-        'success': ('#D1FAE5', '#065F46', '#10B981'),
-        'info': ('#DBEAFE', '#1E40AF', '#3B82F6'),
-        'warning': ('#FEF3C7', '#92400E', '#F59E0B'),
-        'error': ('#FEE2E2', '#991B1B', '#EF4444')
+        'success': ('#D1FAE5', '#065F46', '#059669'), # Green: BG, Text, Border
+        'info':    ('#DBEAFE', '#1E40AF', '#2563EB'), # Blue
+        'warning': ('#FEF3C7', '#92400E', '#D97706'), # Orange
+        'error':   ('#FEE2E2', '#991B1B', '#DC2626')  # Red
     }
     
     icons = {
@@ -60,12 +48,13 @@ def alert_box(message: str, alert_type: str = "info", dismissible: bool = False)
     st.markdown(f"""
     <div style="
         background-color: {bg_color};
-        border-left: 4px solid {border_color};
+        border-left: 6px solid {border_color};
         padding: 1rem;
         border-radius: 0.5rem;
         margin: 1rem 0;
         color: {text_color};
-        font-weight: 500;
+        font-weight: 600;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     ">
         {icon} {message}
     </div>
@@ -74,21 +63,17 @@ def alert_box(message: str, alert_type: str = "info", dismissible: bool = False)
 
 def risk_badge(risk_level: str, score: float):
     """
-    Display a risk level badge
-    
-    Args:
-        risk_level: 'critical', 'high', 'medium', 'low', 'minimal'
-        score: Risk score 0-1
+    Display a risk level badge with Stronger Colors
     """
     colors = {
-        'critical': ('#EF4444', 'white'),
-        'high': ('#F59E0B', 'white'),
-        'medium': ('#F59E0B', 'white'),
-        'low': ('#10B981', 'white'),
-        'minimal': ('#10B981', 'white')
+        'critical': ('#DC2626', 'white'), # Red 600
+        'high':     ('#EA580C', 'white'), # Orange 600
+        'medium':   ('#D97706', 'white'), # Amber 600
+        'low':      ('#059669', 'white'), # Emerald 600
+        'minimal':  ('#059669', 'white')
     }
     
-    bg_color, text_color = colors.get(risk_level, ('#6B7280', 'white'))
+    bg_color, text_color = colors.get(risk_level, ('#4B5563', 'white'))
     
     st.markdown(f"""
     <div style="
@@ -101,6 +86,7 @@ def risk_badge(risk_level: str, score: float):
         text-transform: uppercase;
         font-size: 0.875rem;
         letter-spacing: 0.05em;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.15);
     ">
         {risk_level} ({score:.0%})
     </div>
@@ -110,11 +96,6 @@ def risk_badge(risk_level: str, score: float):
 def progress_ring(value: float, label: str, color: str = "#3B82F6"):
     """
     Display a circular progress indicator
-    
-    Args:
-        value: Progress value 0-1
-        label: Label text
-        color: Ring color
     """
     percentage = int(value * 100)
     
@@ -126,21 +107,19 @@ def progress_ring(value: float, label: str, color: str = "#3B82F6"):
         gauge={
             'axis': {'range': [None, 100]},
             'bar': {'color': color},
-            'bgcolor': "lightgray",
+            'bgcolor': "white",
             'borderwidth': 2,
-            'bordercolor': "gray",
+            'bordercolor': "#D1D5DB",
             'steps': [
-                {'range': [0, 40], 'color': '#FEE2E2'},
-                {'range': [40, 70], 'color': '#FEF3C7'},
-                {'range': [70, 100], 'color': '#D1FAE5'}
+                {'range': [0, 100], 'color': '#F3F4F6'}
             ],
         }
     ))
     
     fig.update_layout(
-        height=200,
+        height=150,
         margin=dict(l=10, r=10, t=30, b=10),
-        title={'text': label, 'x': 0.5, 'xanchor': 'center'}
+        title={'text': label, 'font': {'size': 14, 'color': '#374151', 'weight': 'bold'}}
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -150,13 +129,6 @@ def timeline_chart(data: pd.DataFrame, x_col: str, y_col: str,
                    title: str = "Timeline", color: str = "#3B82F6"):
     """
     Display a timeline chart
-    
-    Args:
-        data: DataFrame with time series data
-        x_col: Column name for x-axis (time)
-        y_col: Column name for y-axis (values)
-        title: Chart title
-        color: Line color
     """
     fig = go.Figure()
     
@@ -185,51 +157,55 @@ def timeline_chart(data: pd.DataFrame, x_col: str, y_col: str,
 def news_card(title: str, source: str, time_ago: str, 
               sentiment: float, category: str, url: str = "#"):
     """
-    Display a news article card
-    
-    Args:
-        title: Article title
-        source: News source
-        time_ago: Time since published
-        sentiment: Sentiment score -1 to 1
-        category: Article category
-        url: Article URL
+    Display a news article card with VISIBLE Backgrounds
     """
-    # Sentiment emoji
-    if sentiment > 0.3:
+    # Logic to determine Color and Background (High Contrast Mode)
+    if sentiment > 0.05:
+        # POSITIVE: Emerald Green
         sentiment_emoji = "😊"
-        sentiment_color = "#10B981"
-    elif sentiment < -0.3:
+        border_color = "#059669" # Darker Green Border
+        bg_color = "#D1FAE5"     # Visible Mint Green BG
+        text_color = "#064E3B"   # Dark Green Text
+        sentiment_text = f"+{sentiment:.2f}"
+    elif sentiment < -0.05:
+        # NEGATIVE: Strong Red
         sentiment_emoji = "😟"
-        sentiment_color = "#EF4444"
+        border_color = "#DC2626" # Darker Red Border
+        bg_color = "#FEE2E2"     # Visible Red BG
+        text_color = "#7F1D1D"   # Dark Red Text
+        sentiment_text = f"{sentiment:.2f}"
     else:
+        # NEUTRAL: Clear Grey
         sentiment_emoji = "😐"
-        sentiment_color = "#6B7280"
+        border_color = "#6B7280" # Dark Grey Border
+        bg_color = "#E5E7EB"     # Visible Grey BG
+        text_color = "#1F2937"   # Dark Grey Text
+        sentiment_text = "Neutral"
     
     st.markdown(f"""
     <div style="
-        border: 1px solid #E5E7EB;
-        border-left: 4px solid {sentiment_color};
+        border: 1px solid {border_color}40;
+        border-left: 6px solid {border_color};
         padding: 1rem;
         border-radius: 0.5rem;
         margin-bottom: 0.75rem;
-        background-color: white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        background-color: {bg_color}; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     ">
         <div style="display: flex; justify-content: space-between; align-items: start;">
             <div style="flex: 1;">
-                <strong style="font-size: 1rem; color: #1F2937;">{title}</strong>
-                <div style="margin-top: 0.5rem; font-size: 0.875rem; color: #6B7280;">
-                    📰 {source} • 🏷️ {category} • ⏰ {time_ago}
+                <strong style="font-size: 1.05rem; color: #111827;">{title}</strong>
+                <div style="margin-top: 0.5rem; font-size: 0.875rem; color: #4B5563;">
+                    📰 <b>{source}</b> • {category} • {time_ago}
                 </div>
             </div>
-            <div style="font-size: 1.5rem; margin-left: 1rem;">
+            <div style="font-size: 1.8rem; margin-left: 1rem;">
                 {sentiment_emoji}
             </div>
         </div>
-        <div style="margin-top: 0.5rem; font-size: 0.875rem;">
-            <span style="color: {sentiment_color}; font-weight: 600;">
-                Sentiment: {sentiment:+.2f}
+        <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+            <span style="color: {text_color}; font-weight: 800; background-color: rgba(255,255,255,0.5); padding: 2px 6px; border-radius: 4px;">
+                Sentiment: {sentiment_text}
             </span>
         </div>
     </div>
@@ -239,26 +215,21 @@ def news_card(title: str, source: str, time_ago: str,
 def stat_box(value: str, label: str, icon: str = "📊", color: str = "#3B82F6"):
     """
     Display a statistic box
-    
-    Args:
-        value: Main value to display
-        label: Label text
-        icon: Emoji icon
-        color: Accent color
     """
     st.markdown(f"""
     <div style="
-        background: linear-gradient(135deg, {color}15 0%, {color}05 100%);
+        background: linear-gradient(135deg, {color}20 0%, {color}05 100%);
         border: 2px solid {color};
         border-radius: 1rem;
         padding: 1.5rem;
         text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     ">
         <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">{icon}</div>
         <div style="font-size: 2rem; font-weight: bold; color: {color}; margin-bottom: 0.25rem;">
             {value}
         </div>
-        <div style="font-size: 0.875rem; color: #6B7280; text-transform: uppercase; letter-spacing: 0.05em;">
+        <div style="font-size: 0.875rem; color: #4B5563; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
             {label}
         </div>
     </div>
@@ -267,43 +238,39 @@ def stat_box(value: str, label: str, icon: str = "📊", color: str = "#3B82F6")
 
 def recommendation_card(priority: str, action: str, reason: str, impact: str):
     """
-    Display an AI recommendation card
-    
-    Args:
-        priority: 'HIGH', 'MEDIUM', 'LOW'
-        action: Recommended action
-        reason: Reason for recommendation
-        impact: Expected impact
+    Display an AI recommendation card with High Contrast
     """
     colors = {
-        'HIGH': '#EF4444',
-        'MEDIUM': '#F59E0B',
-        'LOW': '#10B981'
+        'HIGH':   ('#DC2626', '#FEF2F2'), # Red Border, Red BG
+        'MEDIUM': ('#D97706', '#FFFBEB'), # Amber Border, Amber BG
+        'LOW':    ('#059669', '#ECFDF5')  # Emerald Border, Green BG
     }
     
-    color = colors.get(priority, '#6B7280')
+    # Default to Grey if unknown
+    border_color, bg_color = colors.get(priority, ('#4B5563', '#F3F4F6'))
     
     st.markdown(f"""
     <div style="
-        background-color: #F9FAFB;
-        border-left: 4px solid {color};
-        padding: 1rem;
+        background-color: {bg_color};
+        border-left: 6px solid {border_color};
+        padding: 1.25rem;
         border-radius: 0.5rem;
         margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     ">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <strong style="color: {color}; font-size: 0.875rem; letter-spacing: 0.05em;">
-                [{priority}]
+            <strong style="color: {border_color}; font-size: 0.9rem; letter-spacing: 0.05em; text-transform: uppercase; background: white; padding: 2px 8px; border-radius: 4px; border: 1px solid {border_color};">
+                {priority} PRIORITY
             </strong>
         </div>
-        <div style="font-size: 1rem; font-weight: 600; color: #1F2937; margin-bottom: 0.5rem;">
+        <div style="font-size: 1.1rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;">
             {action}
         </div>
-        <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 0.25rem;">
-            📋 {reason}
+        <div style="font-size: 0.95rem; color: #374151; margin-bottom: 0.25rem;">
+            <span style="font-weight: 600;">📋 Reason:</span> {reason}
         </div>
-        <div style="font-size: 0.875rem; color: #6B7280;">
-            💡 {impact}
+        <div style="font-size: 0.95rem; color: #374151;">
+            <span style="font-weight: 600;">💡 Impact:</span> {impact}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -312,11 +279,6 @@ def recommendation_card(priority: str, action: str, reason: str, impact: str):
 def data_table(df: pd.DataFrame, title: str = "Data Table", max_rows: int = 10):
     """
     Display a styled data table
-    
-    Args:
-        df: DataFrame to display
-        title: Table title
-        max_rows: Maximum rows to show
     """
     st.markdown(f"### {title}")
     st.dataframe(
@@ -330,10 +292,6 @@ def data_table(df: pd.DataFrame, title: str = "Data Table", max_rows: int = 10):
 def trend_indicator(value: float, threshold: float = 0):
     """
     Display a trend indicator arrow
-    
-    Args:
-        value: Trend value
-        threshold: Threshold for neutral
     """
     if value > threshold:
         return "📈 ↑", "#10B981"

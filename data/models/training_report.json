@@ -1,11 +1,11 @@
 {
-  "training_completed_at": "2025-12-03T18:48:21.065901",
+  "training_completed_at": "2025-12-08T00:14:11.481594",
   "training_data": {
-    "samples": 1096,
+    "samples": 1095,
     "features": 15,
     "date_range": {
-      "start": "2022-12-04T00:00:00",
-      "end": "2025-12-03T00:00:00"
+      "start": "2022-12-09T00:00:00",
+      "end": "2025-12-07T00:00:00"
     }
   },
   "models": {

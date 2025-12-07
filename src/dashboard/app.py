@@ -27,6 +27,27 @@ def load_data():
         return None
     with open(path, 'r') as f: return json.load(f)
 
+# --- FIXED FUNCTION: NOW ACCEPTS DATA ---
+def render_ai_recommendations(recs_data):
+    """Render AI-powered recommendations from Real Data"""
+    st.markdown("### 🤖 Strategic Actions")
+    
+    if not recs_data:
+        st.info("✅ No immediate high-risk actions required.")
+        return
+
+    # Loop through the REAL recommendations from the JSON
+    for rec in recs_data:
+        # Handle cases where priority might be missing or lowercase
+        priority = rec.get('priority', 'LOW').upper()
+        
+        ui.recommendation_card(
+            priority=priority,
+            action=rec.get('action', 'Monitor situation'),
+            reason=rec.get('reason', 'Routine check'),
+            impact=rec.get('impact', 'Maintain awareness')
+        )
+
 def main():
     st.title("🇱🇰 PulseX Sri Lanka")
     st.caption(f"Situational Awareness Platform | Updated: {datetime.now().strftime('%H:%M')}")
@@ -42,12 +63,12 @@ def main():
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         ui.metric_card("Overall Risk", f"{data['overall_risk']:.0%}", 
-                      delta="Critical" if data['overall_risk'] > 0.7 else "Stable", 
-                      icon="🛡️")
+                       delta="Critical" if data['overall_risk'] > 0.7 else "Stable", 
+                       icon="🛡️")
     with c2:
         ui.metric_card("Sentiment", f"{data['sentiment_avg']:.2f}", icon="💬")
     with c3:
-        ui.metric_card("Inflation", f"{data['context']['inflation_rate']}%", icon="💰")
+        ui.metric_card("Inflation", f"{data['context']['inflation_rate']:.2f}%", icon="💰")
     with c4:
         ui.metric_card("Articles", str(data['total_articles']), icon="📰")
 
@@ -59,27 +80,23 @@ def main():
     with col_left:
         st.subheader("📡 Intelligence Feed")
         
-        # News Feed using Custom Component
-        for item in data.get('recent_news', []):
-            ui.news_card(
-                title=item['title'],
-                source=item['source'],
-                time_ago=item['published_date'][:10],
-                sentiment=item.get('sentiment_score', 0),
-                category=item.get('type', 'General').title()
-            )
+        # News Feed
+        recent_news = data.get('recent_news', [])
+        if recent_news:
+            for item in recent_news:
+                ui.news_card(
+                    title=item['title'],
+                    source=item['source'],
+                    time_ago=item['published_date'][:10],
+                    sentiment=item.get('sentiment_score', 0),
+                    category=item.get('type', 'General').title()
+                )
+        else:
+            st.info("No news data available.")
 
     with col_right:
-        st.subheader("🤖 Strategic Actions")
-        
-        # Recommendations using Custom Component
-        for rec in data.get('recommendations', []):
-            ui.recommendation_card(
-                priority=rec['priority'],
-                action=rec['action'],
-                reason=rec['reason'],
-                impact=rec['impact']
-            )
+        # PASS THE REAL DATA HERE
+        render_ai_recommendations(data.get('recommendations', []))
             
         st.subheader("📊 Risk Factors")
         breakdown = data.get('risk_breakdown', {})

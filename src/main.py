@@ -27,7 +27,7 @@ PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- IMPORTS ---
-from data_ingestion.news_scraper import NewsScraperEngine
+from src.data_ingestion.news_scraper import NewsScraperEngine
 from data_ingestion.social_monitor import SocialMediaAggregator
 from data_ingestion.weather_events import WeatherEventAggregator
 from data_ingestion.economic_api import get_inflation
@@ -139,6 +139,7 @@ class PulseXPipeline:
         # 4. Features & Trends
         df_feats = df.copy()
         df_feats['content'] = df['clean_content']
+        df_feats['scraped_at'] = df_feats['published_date']  # Add scraped_at column
         feats_df = self.feature_extractor.create_feature_matrix(df_feats)
         
         sent_series = df.set_index('published_date')['sentiment_score'].resample('H').mean().fillna(0)
