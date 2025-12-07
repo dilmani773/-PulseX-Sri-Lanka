@@ -1,7 +1,7 @@
 """
 PulseX Sri Lanka - Main Pipeline
 Orchestrates end-to-end data collection, analysis, and serving
-Refactored to connect with Dashboard
+Refactored to connect with Dashboard and include Text Cleaning
 """
 
 import asyncio
@@ -27,6 +27,7 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 from data_ingestion.news_scraper import NewsScraperEngine
 from preprocessing.feature_extractor import AdvancedFeatureExtractor
+from preprocessing.text_cleaner import TextCleaner  # <--- NEW IMPORT
 from models.anomaly_detector import HybridAnomalyDetector
 from models.risk_scorer import BayesianRiskScorer
 
@@ -36,6 +37,8 @@ logger = logging.getLogger(__name__)
 class PulseXPipeline:
     def __init__(self):
         self.feature_extractor = AdvancedFeatureExtractor()
+        self.text_cleaner = TextCleaner()  # <--- NEW INITIALIZATION
+        
         # Load existing model if available to avoid "Cold Start"
         self.anomaly_detector = HybridAnomalyDetector()
         model_path = MODELS_DIR / "anomaly_detector_latest.pkl"
@@ -84,30 +87,51 @@ class PulseXPipeline:
         return df
 
     def run_analysis(self, df: pd.DataFrame):
-        # 1. Preprocess
-        df['sentiment_score'] = np.random.uniform(-0.8, 0.2, len(df)) # Placeholder for sentiment model
+        if df.empty:
+            return df, pd.DataFrame(), None
+
+        # 1. PREPROCESS & CLEAN (The Fix!)
+        logger.info("Cleaning text...")
+        # Apply cleaning to the 'content' column
+        # We keep punctuation because Feature Extractor needs it for sentence segmentation
+        if 'content' in df.columns:
+            df['clean_content'] = df['content'].apply(
+                lambda x: self.text_cleaner.clean_text(str(x), remove_stopwords=False)['cleaned']
+            )
+        else:
+            df['clean_content'] = ""
+
+        # Placeholder for sentiment model (or hook up sentiment engine here)
+        df['sentiment_score'] = np.random.uniform(-0.8, 0.2, len(df)) 
         df['engagement'] = np.random.randint(100, 5000, len(df))
         
         # 2. Extract Features (The math part)
-        features_df = self.feature_extractor.create_feature_matrix(df)
+        # IMPORTANT: Use 'clean_content' instead of raw 'content' for accuracy
+        df_for_features = df.copy()
+        df_for_features['content'] = df['clean_content'] 
+        features_df = self.feature_extractor.create_feature_matrix(df_for_features)
         
         # 3. Anomaly Detection
         if not self.anomaly_detector.is_fitted:
             logger.info("Fitting anomaly detector on initial batch")
             # Create synthetic history if batch is too small
             if len(features_df) < 50:
-                dummy_X = np.random.randn(100, len(features_df.columns)-2) # -2 for timestamp/count
                 # Align columns manually or just fit on current batch for demo
                 numeric_cols = features_df.select_dtypes(include=[np.number]).columns
-                X = features_df[numeric_cols].fillna(0).values
-                self.anomaly_detector.fit(X)
+                if len(numeric_cols) > 0:
+                    X = features_df[numeric_cols].fillna(0).values
+                    self.anomaly_detector.fit(X)
             else:
                  numeric_cols = features_df.select_dtypes(include=[np.number]).columns
-                 self.anomaly_detector.fit(features_df[numeric_cols].fillna(0).values)
+                 if len(numeric_cols) > 0:
+                    self.anomaly_detector.fit(features_df[numeric_cols].fillna(0).values)
 
         numeric_cols = features_df.select_dtypes(include=[np.number]).columns
-        X = features_df[numeric_cols].fillna(0).values
-        features_df['anomaly_score'] = self.anomaly_detector.predict(X, return_scores=True)
+        if len(numeric_cols) > 0:
+            X = features_df[numeric_cols].fillna(0).values
+            features_df['anomaly_score'] = self.anomaly_detector.predict(X, return_scores=True)
+        else:
+            features_df['anomaly_score'] = 0.5
         
         # 4. Risk Scoring
         latest_risk = None
@@ -130,12 +154,12 @@ class PulseXPipeline:
             "last_updated": datetime.now().isoformat(),
             "overall_risk": risk_assessment.overall_score if risk_assessment else 0.5,
             "risk_level": risk_assessment.risk_level.value if risk_assessment else "medium",
-            "sentiment_avg": float(df['sentiment_score'].mean()),
-            "active_alerts": int(df[df['sentiment_score'] < -0.7].shape[0]), # Simple logic
+            "sentiment_avg": float(df['sentiment_score'].mean()) if not df.empty else 0.0,
+            "active_alerts": int(df[df['sentiment_score'] < -0.7].shape[0]) if not df.empty else 0, 
             "total_articles": len(df),
             "recommendations": risk_assessment.recommendations if risk_assessment else [],
             "risk_breakdown": risk_assessment.components if risk_assessment else {},
-            "recent_news": df.head(10).to_dict(orient='records')
+            "recent_news": df.head(10).to_dict(orient='records') if not df.empty else []
         }
         
         with open(PROCESSED_DATA_DIR / "dashboard_data.json", 'w') as f:
