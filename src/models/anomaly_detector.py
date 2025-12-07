@@ -1,6 +1,6 @@
 """
 Hybrid Anomaly Detection System
-Combines multiple algorithms for robust detection
+Refactored for Real-Time Inference (Stateful)
 """
 
 import numpy as np
@@ -8,205 +8,189 @@ import pandas as pd
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from typing import Tuple, List, Dict
+from sklearn.neighbors import NearestNeighbors
+from typing import Tuple, List, Dict, Optional
 import joblib
 from pathlib import Path
 
-
 class HybridAnomalyDetector:
     """
-    Multi-algorithm anomaly detection with ensemble voting
-    Showcases understanding of:
-    - Statistical methods (Z-score, MAD)
-    - Tree-based isolation
-    - Density estimation
-    - Dimensionality reduction
+    Multi-algorithm anomaly detection optimized for Real-Time Streams.
+    Separates 'fitting' (learning history) from 'scoring' (judging new data).
     """
     
     def __init__(self, contamination: float = 0.1, n_estimators: int = 100):
         self.contamination = contamination
         self.n_estimators = n_estimators
         
-        # Initialize models
+        # Models
         self.isolation_forest = IsolationForest(
             contamination=contamination,
             n_estimators=n_estimators,
             random_state=42,
             n_jobs=-1
         )
-        
         self.scaler = StandardScaler()
-        self.pca = PCA(n_components=0.95)  # Retain 95% variance
+        self.pca = PCA(n_components=0.95)
+        self.knn = NearestNeighbors(n_neighbors=10) # Persist KNN model
         
+        # State (Learned Statistics)
         self.is_fitted = False
         self.feature_importance_ = None
+        self.train_median = None
+        self.train_mad = None
         
-    def statistical_anomaly_score(self, X: np.ndarray) -> np.ndarray:
-        """
-        Calculate anomaly scores using modified Z-score (MAD-based)
-        More robust than standard Z-score to outliers
-        """
-        median = np.median(X, axis=0)
-        mad = np.median(np.abs(X - median), axis=0)
+        # Normalization factors (Min/Max scores seen during training)
+        self.norm_params = {
+            'stat': {'min': 0, 'max': 1},
+            'iso': {'min': 0, 'max': 1},
+            'dens': {'min': 0, 'max': 1},
+            'recon': {'min': 0, 'max': 1}
+        }
         
-        # Avoid division by zero
-        mad = np.where(mad == 0, 1e-6, mad)
-        
-        # Modified Z-score
-        modified_z = 0.6745 * (X - median) / mad
-        
-        # Aggregate across features (Mahalanobis-like)
-        anomaly_scores = np.sqrt(np.sum(modified_z ** 2, axis=1))
-        
-        return anomaly_scores
-    
-    def isolation_anomaly_score(self, X: np.ndarray) -> np.ndarray:
-        """
-        Use Isolation Forest decision function
-        Based on path length in random trees
-        """
-        # Negative scores mean anomalies
-        scores = -self.isolation_forest.decision_function(X)
-        
-        # Normalize to [0, 1]
-        scores = (scores - scores.min()) / (scores.max() - scores.min() + 1e-6)
-        
-        return scores
-    
-    def density_anomaly_score(self, X: np.ndarray, k: int = 10) -> np.ndarray:
-        """
-        Local Outlier Factor-inspired density estimation
-        Uses k-nearest neighbors distance
-        """
-        from sklearn.neighbors import NearestNeighbors
-        
-        nbrs = NearestNeighbors(n_neighbors=min(k, len(X)-1))
-        nbrs.fit(X)
-        
-        distances, _ = nbrs.kneighbors(X)
-        
-        # Average distance to k nearest neighbors
-        avg_distances = np.mean(distances, axis=1)
-        
-        # Normalize
-        scores = (avg_distances - avg_distances.min()) / (avg_distances.max() - avg_distances.min() + 1e-6)
-        
-        return scores
-    
-    def reconstruction_anomaly_score(self, X: np.ndarray) -> np.ndarray:
-        """
-        PCA reconstruction error
-        Anomalies are poorly reconstructed
-        """
-        X_transformed = self.pca.transform(X)
-        X_reconstructed = self.pca.inverse_transform(X_transformed)
-        
-        # Reconstruction error
-        reconstruction_error = np.sum((X - X_reconstructed) ** 2, axis=1)
-        
-        # Normalize
-        scores = (reconstruction_error - reconstruction_error.min()) / \
-                 (reconstruction_error.max() - reconstruction_error.min() + 1e-6)
-        
-        return scores
-    
     def fit(self, X: np.ndarray) -> 'HybridAnomalyDetector':
         """
-        Fit all detectors
+        Fit all detectors on HISTORICAL data.
+        Must be called before using the dashboard.
         """
-        # Scale features
+        # 1. Scale features
         X_scaled = self.scaler.fit_transform(X)
         
-        # Fit PCA
+        # 2. Fit PCA
         self.pca.fit(X_scaled)
         
-        # Fit Isolation Forest
+        # 3. Fit Isolation Forest
         self.isolation_forest.fit(X_scaled)
         
-        self.is_fitted = True
+        # 4. Fit KNN (Density)
+        # Use min(10, len-1) to avoid errors on small datasets
+        k = min(10, max(1, len(X_scaled)-1))
+        self.knn.set_params(n_neighbors=k)
+        self.knn.fit(X_scaled)
         
-        # Calculate feature importance (from Isolation Forest)
+        # 5. Calculate Statistical Baselines (Median & MAD) for future reference
+        self.train_median = np.median(X_scaled, axis=0)
+        self.train_mad = np.median(np.abs(X_scaled - self.train_median), axis=0)
+        # Prevent division by zero
+        self.train_mad = np.where(self.train_mad == 0, 1e-6, self.train_mad)
+        
+        # 6. Calibrate Normalization Ranges
+        # We run the scores on the training set to find min/max for normalization
+        stat_scores = self._raw_statistical_score(X_scaled)
+        iso_scores = -self.isolation_forest.decision_function(X_scaled)
+        dens_scores = self._raw_density_score(X_scaled)
+        recon_scores = self._raw_reconstruction_score(X_scaled)
+        
+        self.norm_params['stat'] = {'min': stat_scores.min(), 'max': stat_scores.max()}
+        self.norm_params['iso'] = {'min': iso_scores.min(), 'max': iso_scores.max()}
+        self.norm_params['dens'] = {'min': dens_scores.min(), 'max': dens_scores.max()}
+        self.norm_params['recon'] = {'min': recon_scores.min(), 'max': recon_scores.max()}
+        
+        self.is_fitted = True
         self._compute_feature_importance(X_scaled)
         
         return self
-    
-    def _compute_feature_importance(self, X: np.ndarray):
-        """
-        Estimate feature importance using permutation importance
-        """
-        n_features = X.shape[1]
-        importances = np.zeros(n_features)
-        
-        baseline_score = self.isolation_anomaly_score(X)
-        
-        for i in range(n_features):
-            X_permuted = X.copy()
-            np.random.shuffle(X_permuted[:, i])
-            
-            permuted_score = self.isolation_anomaly_score(X_permuted)
-            
-            # Importance = change in anomaly score
-            importances[i] = np.mean(np.abs(permuted_score - baseline_score))
-        
-        self.feature_importance_ = importances / (importances.sum() + 1e-6)
-    
+
+    # --- Raw Scoring Functions (Internal) ---
+
+    def _raw_statistical_score(self, X_scaled: np.ndarray) -> np.ndarray:
+        # Uses LEARNED median/mad, not current batch's median
+        modified_z = 0.6745 * (X_scaled - self.train_median) / self.train_mad
+        return np.sqrt(np.sum(modified_z ** 2, axis=1))
+
+    def _raw_density_score(self, X_scaled: np.ndarray) -> np.ndarray:
+        # Finds distance to training set neighbors
+        distances, _ = self.knn.kneighbors(X_scaled)
+        return np.mean(distances, axis=1)
+
+    def _raw_reconstruction_score(self, X_scaled: np.ndarray) -> np.ndarray:
+        X_transformed = self.pca.transform(X_scaled)
+        X_reconstructed = self.pca.inverse_transform(X_transformed)
+        return np.sum((X_scaled - X_reconstructed) ** 2, axis=1)
+
+    # --- Public Methods ---
+
     def predict(self, X: np.ndarray, return_scores: bool = False) -> np.ndarray:
         """
-        Ensemble prediction using multiple methods
+        Predict on NEW data (single point or batch) without re-fitting.
         """
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
         
-        # Scale input
+        # Scale input using learned scaler
         X_scaled = self.scaler.transform(X)
         
-        # Get scores from each method
-        stat_scores = self.statistical_anomaly_score(X_scaled)
-        iso_scores = self.isolation_anomaly_score(X_scaled)
-        density_scores = self.density_anomaly_score(X_scaled)
-        recon_scores = self.reconstruction_anomaly_score(X_scaled)
+        # Get Raw Scores
+        raw_stat = self._raw_statistical_score(X_scaled)
+        raw_iso = -self.isolation_forest.decision_function(X_scaled)
+        raw_dens = self._raw_density_score(X_scaled)
+        raw_recon = self._raw_reconstruction_score(X_scaled)
+        
+        # Normalize using learned ranges (Clip to 0-1)
+        def norm(vals, key):
+            p = self.norm_params[key]
+            denom = p['max'] - p['min'] + 1e-6
+            return np.clip((vals - p['min']) / denom, 0, 1)
+            
+        norm_stat = norm(raw_stat, 'stat')
+        norm_iso = norm(raw_iso, 'iso')
+        norm_dens = norm(raw_dens, 'dens')
+        norm_recon = norm(raw_recon, 'recon')
         
         # Ensemble: weighted average
-        weights = np.array([0.25, 0.35, 0.20, 0.20])  # Tunable
+        weights = np.array([0.25, 0.35, 0.20, 0.20])
         ensemble_scores = (
-            weights[0] * stat_scores +
-            weights[1] * iso_scores +
-            weights[2] * density_scores +
-            weights[3] * recon_scores
+            weights[0] * norm_stat +
+            weights[1] * norm_iso +
+            weights[2] * norm_dens +
+            weights[3] * norm_recon
         )
         
         if return_scores:
             return ensemble_scores
         
-        # Classify based on threshold
-        threshold = np.percentile(ensemble_scores, (1 - self.contamination) * 100)
-        predictions = (ensemble_scores > threshold).astype(int)
+        # Threshold (90th percentile of training data - approximated here)
+        return (ensemble_scores > 0.7).astype(int) # Simplified threshold for runtime
+
+    def _compute_feature_importance(self, X: np.ndarray):
+        """Estimate feature importance (kept from original)"""
+        n_features = X.shape[1]
+        importances = np.zeros(n_features)
+        baseline_score = -self.isolation_forest.decision_function(X)
         
-        return predictions
+        # Quick approximation using subset to save time
+        subset_idx = np.random.choice(len(X), size=min(len(X), 100), replace=False)
+        X_sub = X[subset_idx]
+        baseline_sub = baseline_score[subset_idx]
+        
+        for i in range(n_features):
+            X_permuted = X_sub.copy()
+            np.random.shuffle(X_permuted[:, i])
+            # Only use Isolation Forest for importance (fastest)
+            permuted_score = -self.isolation_forest.decision_function(X_permuted)
+            importances[i] = np.mean(np.abs(permuted_score - baseline_sub))
+        
+        self.feature_importance_ = importances / (importances.sum() + 1e-6)
     
     def get_anomaly_explanations(self, X: np.ndarray, feature_names: List[str] = None) -> List[Dict]:
-        """
-        Explain why each instance is anomalous
-        """
+        """Explain anomalies"""
         if not self.is_fitted:
-            raise ValueError("Model must be fitted before explanation")
+            raise ValueError("Model must be fitted")
         
         X_scaled = self.scaler.transform(X)
-        scores = self.predict(X_scaled, return_scores=True)
-        
+        scores = self.predict(X, return_scores=True)
         explanations = []
         
         for i, score in enumerate(scores):
-            # Find most deviant features
+            # Compare to TRAINED median
             instance = X_scaled[i]
-            median = np.median(X_scaled, axis=0)
-            deviations = np.abs(instance - median)
+            deviations = np.abs(instance - self.train_median)
             
-            top_features_idx = np.argsort(deviations)[-3:]  # Top 3
+            top_features_idx = np.argsort(deviations)[-3:]
             
             explanation = {
                 'anomaly_score': float(score),
-                'is_anomaly': bool(score > np.percentile(scores, 90)),
+                'is_anomaly': bool(score > 0.7),
                 'contributing_features': []
             }
             
@@ -217,17 +201,20 @@ class HybridAnomalyDetector:
                     'deviation': float(deviations[idx]),
                     'importance': float(self.feature_importance_[idx])
                 })
-            
             explanations.append(explanation)
         
         return explanations
-    
+        
     def save(self, path: Path):
-        """Save model"""
+        """Save everything needed for inference"""
         joblib.dump({
             'isolation_forest': self.isolation_forest,
             'scaler': self.scaler,
             'pca': self.pca,
+            'knn': self.knn,
+            'train_median': self.train_median,
+            'train_mad': self.train_mad,
+            'norm_params': self.norm_params,
             'feature_importance': self.feature_importance_,
             'is_fitted': self.is_fitted
         }, path)
@@ -238,42 +225,9 @@ class HybridAnomalyDetector:
         self.isolation_forest = data['isolation_forest']
         self.scaler = data['scaler']
         self.pca = data['pca']
+        self.knn = data['knn']
+        self.train_median = data['train_median']
+        self.train_mad = data['train_mad']
+        self.norm_params = data['norm_params']
         self.feature_importance_ = data['feature_importance']
         self.is_fitted = data['is_fitted']
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    # Generate synthetic data
-    np.random.seed(42)
-    
-    # Normal data
-    X_normal = np.random.randn(1000, 10)
-    
-    # Inject anomalies
-    X_anomalies = np.random.randn(50, 10) * 3 + 5
-    X = np.vstack([X_normal, X_anomalies])
-    
-    # Fit detector
-    detector = HybridAnomalyDetector(contamination=0.05)
-    detector.fit(X)
-    
-    # Predict
-    predictions = detector.predict(X)
-    scores = detector.predict(X, return_scores=True)
-    
-    print(f"Detected {predictions.sum()} anomalies")
-    print(f"Score range: [{scores.min():.3f}, {scores.max():.3f}]")
-    
-    # Get explanations
-    feature_names = [f"feature_{i}" for i in range(10)]
-    explanations = detector.get_anomaly_explanations(X[:5], feature_names)
-    
-    print("\nSample explanations:")
-    for i, exp in enumerate(explanations):
-        print(f"\nInstance {i}:")
-        print(f"  Anomaly score: {exp['anomaly_score']:.3f}")
-        print(f"  Is anomaly: {exp['is_anomaly']}")
-        print("  Top contributing features:")
-        for feat in exp['contributing_features']:
-            print(f"    - {feat['feature']}: deviation={feat['deviation']:.3f}")
