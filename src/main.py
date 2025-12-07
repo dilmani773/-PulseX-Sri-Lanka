@@ -1,12 +1,12 @@
 """
 PulseX Sri Lanka - Main Pipeline
 Orchestrates end-to-end data collection, analysis, and serving
-Refactored to connect with Dashboard and include Text Cleaning
+Refactored to connect with Dashboard and fully integrate Sentiment & Trend analysis
 """
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import json
 import sys
@@ -27,9 +27,11 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 from data_ingestion.news_scraper import NewsScraperEngine
 from preprocessing.feature_extractor import AdvancedFeatureExtractor
-from preprocessing.text_cleaner import TextCleaner  # <--- NEW IMPORT
+from preprocessing.text_cleaner import TextCleaner
 from models.anomaly_detector import HybridAnomalyDetector
 from models.risk_scorer import BayesianRiskScorer
+from models.sentiment_engine import SentimentAnalyzer # <--- NEW IMPORT
+from models.trend_analyzer import TrendAnalyzer     # <--- NEW IMPORT
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -37,7 +39,9 @@ logger = logging.getLogger(__name__)
 class PulseXPipeline:
     def __init__(self):
         self.feature_extractor = AdvancedFeatureExtractor()
-        self.text_cleaner = TextCleaner()  # <--- NEW INITIALIZATION
+        self.text_cleaner = TextCleaner()
+        self.sentiment_analyzer = SentimentAnalyzer() # <--- INITIALIZED
+        self.trend_analyzer = TrendAnalyzer()         # <--- INITIALIZED
         
         # Load existing model if available to avoid "Cold Start"
         self.anomaly_detector = HybridAnomalyDetector()
@@ -73,13 +77,16 @@ class PulseXPipeline:
 
         # Fallback for empty scraping (Common in demos)
         if len(df) == 0:
+            logger.warning("Using synthetic fallback data.")
+            # Ensure dates are distributed in the past for trend analysis to work
+            dates = [datetime.now() - timedelta(hours=i*2) for i in reversed(range(50))]
             df = pd.DataFrame({
-                'title': [f"Economic update {i}" for i in range(5)],
-                'content': ["Market shows volatility in fuel prices"] * 5,
-                'source': ["Daily Mirror"] * 5,
-                'published_date': [datetime.now()] * 5,
-                'scraped_at': [datetime.now()] * 5,
-                'url': ["http://example.com"] * 5
+                'title': [f"Update {i}" for i in range(50)],
+                'content': ["Market shows volatility in fuel prices and currency exchange. Tourism sees growth."] * 50,
+                'source': ["Daily Mirror"] * 50,
+                'published_date': dates,
+                'scraped_at': [datetime.now()] * 50,
+                'url': ["http://example.com"] * 50
             })
             
         df['published_date'] = pd.to_datetime(df['published_date'])
@@ -90,61 +97,65 @@ class PulseXPipeline:
         if df.empty:
             return df, pd.DataFrame(), None
 
-        # 1. PREPROCESS & CLEAN (The Fix!)
-        logger.info("Cleaning text...")
-        # Apply cleaning to the 'content' column
-        # We keep punctuation because Feature Extractor needs it for sentence segmentation
-        if 'content' in df.columns:
-            df['clean_content'] = df['content'].apply(
-                lambda x: self.text_cleaner.clean_text(str(x), remove_stopwords=False)['cleaned']
-            )
-        else:
-            df['clean_content'] = ""
-
-        # Placeholder for sentiment model (or hook up sentiment engine here)
-        df['sentiment_score'] = np.random.uniform(-0.8, 0.2, len(df)) 
-        df['engagement'] = np.random.randint(100, 5000, len(df))
+        # 1. PREPROCESS & SENTIMENT ANALYSIS (Real Sentiment)
+        logger.info("Cleaning and running Sentiment Analysis...")
         
-        # 2. Extract Features (The math part)
-        # IMPORTANT: Use 'clean_content' instead of raw 'content' for accuracy
+        df['clean_content'] = df['content'].apply(
+            lambda x: self.text_cleaner.clean_text(str(x), remove_stopwords=False)['cleaned']
+        )
+        # Calculate real sentiment score (compound score)
+        df['sentiment_results'] = df['clean_content'].apply(self.sentiment_analyzer.analyze_text)
+        df['sentiment_score'] = df['sentiment_results'].apply(lambda x: x['compound'])
+        df['engagement'] = np.random.randint(100, 5000, len(df)) # Keep engagement placeholder
+        
+        # 2. Extract Features
         df_for_features = df.copy()
         df_for_features['content'] = df['clean_content'] 
         features_df = self.feature_extractor.create_feature_matrix(df_for_features)
         
-        # 3. Anomaly Detection
+        # 3. Trend Analysis on Sentiment (NEW)
+        # Aggregate sentiment by the hour to create a time series
+        sentiment_series = df.set_index('published_date')['sentiment_score'].resample('H').mean().fillna(0)
+        
+        if len(sentiment_series) > 3:
+            trend_info = self.trend_analyzer.detect_trend(sentiment_series.values)
+            sentiment_trend_slope = trend_info['slope']
+            sentiment_volatility = sentiment_series.std()
+        else:
+            sentiment_trend_slope = 0.0
+            sentiment_volatility = df['sentiment_score'].std() if len(df) > 1 else 0.0
+        
+        # 4. Anomaly Detection
+        # ... (Keep existing anomaly detection logic as is) ...
         if not self.anomaly_detector.is_fitted:
             logger.info("Fitting anomaly detector on initial batch")
-            # Create synthetic history if batch is too small
-            if len(features_df) < 50:
-                # Align columns manually or just fit on current batch for demo
-                numeric_cols = features_df.select_dtypes(include=[np.number]).columns
-                if len(numeric_cols) > 0:
-                    X = features_df[numeric_cols].fillna(0).values
-                    self.anomaly_detector.fit(X)
-            else:
-                 numeric_cols = features_df.select_dtypes(include=[np.number]).columns
-                 if len(numeric_cols) > 0:
-                    self.anomaly_detector.fit(features_df[numeric_cols].fillna(0).values)
+            numeric_cols = features_df.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) > 0 and len(features_df) > 1:
+                X = features_df[numeric_cols].fillna(0).values
+                self.anomaly_detector.fit(X)
 
         numeric_cols = features_df.select_dtypes(include=[np.number]).columns
-        if len(numeric_cols) > 0:
+        if len(numeric_cols) > 0 and self.anomaly_detector.is_fitted:
             X = features_df[numeric_cols].fillna(0).values
             features_df['anomaly_score'] = self.anomaly_detector.predict(X, return_scores=True)
         else:
             features_df['anomaly_score'] = 0.5
         
-        # 4. Risk Scoring
+        # 5. Risk Scoring (Now uses real trend data)
         latest_risk = None
-        for _, row in features_df.iterrows():
-            indicators = {
-                'sentiment_score': row.get('sentiment_mean', -0.5),
-                'sentiment_volatility': row.get('sentiment_volatility', 0.2),
-                'time_series_values': np.array([10, 12, 15]), # Placeholder
-                'trend_slope': row.get('trend_slope', -0.1),
-                'anomaly_score': row.get('anomaly_score', 0.5),
-                'timestamp': row.get('timestamp', datetime.now())
-            }
-            latest_risk = self.risk_scorer.assess_risk(indicators)
+        # Use the average anomaly score from the batch for the overall risk score
+        batch_anomaly_score = features_df['anomaly_score'].mean()
+        
+        indicators = {
+            'sentiment_score': df['sentiment_score'].mean(),
+            'sentiment_volatility': sentiment_volatility, # <--- REAL VOLATILITY
+            'time_series_values': sentiment_series.values if len(sentiment_series) > 0 else np.array([0]),
+            'trend_slope': sentiment_trend_slope,         # <--- REAL TREND SLOPE
+            'anomaly_score': batch_anomaly_score,
+            'timestamp': datetime.now()
+        }
+        latest_risk = self.risk_scorer.assess_risk(indicators)
+
 
         return df, features_df, latest_risk
 
