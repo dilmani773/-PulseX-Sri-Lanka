@@ -1,6 +1,6 @@
 """
-AI-Powered Recommendation Engine (Generative + Template Fallback)
-Generates actionable business recommendations using LLMs or robust templates.
+AI-Powered Recommendation Engine (Hybrid)
+Generates actionable business recommendations using Robust Templates.
 """
 
 from typing import List, Dict
@@ -9,7 +9,7 @@ import os
 import json
 import logging
 
-# Try to import OpenAI (Simulated for demo if missing)
+# Try to import OpenAI (Safe fallback if missing)
 try:
     from openai import OpenAI
     HAS_OPENAI = True
@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class RecommendationEngine:
     def __init__(self):
         self.recommendation_templates = self._load_templates()
-        # Initialize OpenAI client if key is present
-        self.api_key = os.getenv("OPENAI_API_KEY")
+        # Initialize OpenAI client if API key is present in the environment
+        # NOTE: do NOT hardcode keys in source; read from `OPENAI_API_KEY` env var.
+        self.api_key = os.getenv("OPENAI_API_KEY")  
         self.client = OpenAI(api_key=self.api_key) if (HAS_OPENAI and self.api_key) else None
 
     def generate_recommendations(self, 
@@ -35,6 +36,7 @@ class RecommendationEngine:
         Main entry point: Tries Generative AI first, falls back to Templates.
         """
         # 1. Try Generative AI (If configured)
+        logger.debug(f"Generating recommendations inputs: risk_level={risk_level}, sentiment={sentiment_score}, anomaly={anomaly_score}, volatility={volatility}, trending={trending_topics}")
         if self.client:
             try:
                 logger.info("Attempting to generate AI recommendations...")
@@ -47,42 +49,22 @@ class RecommendationEngine:
 
     def _generate_with_llm(self, risk_level, sentiment, trends) -> List[Dict]:
         """Call OpenAI to generate unique advice"""
-        
         trend_text = ", ".join([t['topic'] for t in trends[:3]]) if trends else "General Market Conditions"
-        
         prompt = f"""
-        You are a Crisis Risk Consultant for a Sri Lankan business conglomerate.
-        Current Situation:
-        - Risk Level: {risk_level.upper()}
-        - Public Sentiment Score: {sentiment:.2f} (-1.0 is bad, +1.0 is good)
-        - Trending Topics: {trend_text}
-
-        Generate 3 specific, actionable business recommendations in JSON format.
-        Each recommendation must have:
-        - "priority": "HIGH", "MEDIUM", or "LOW"
-        - "action": Short title (max 5 words)
-        - "reason": Why this is needed (max 10 words)
-        - "impact": Business outcome (max 10 words)
-        
-        Return ONLY valid JSON array.
+        Situation: Risk={risk_level.upper()}, Sentiment={sentiment:.2f}, Trends={trend_text}.
+        Generate 3 business recommendations (JSON: priority, action, reason, impact).
         """
-
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo", # Or gpt-4
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}]
         )
-        
-        content = response.choices[0].message.content
-        # Basic cleanup to ensure it's pure JSON
-        content = content.replace("```json", "").replace("```", "").strip()
-        return json.loads(content)
+        return json.loads(response.choices[0].message.content)
 
     def _generate_from_templates(self, risk_level, sentiment_score, anomaly_score, volatility, trending_topics):
         """Standard Rule-Based Logic (The reliable fallback)"""
         recommendations = []
         
-        # 1. Topic-Specific (The "Smart" Template part)
+        # 1. Topic-Specific
         topic_recs = self._generate_topic_recommendations(trending_topics)
         recommendations.extend(topic_recs)
         
@@ -93,8 +75,13 @@ class RecommendationEngine:
             if anomaly_score > 0.7: recommendations.append(random.choice(source['anomaly_detected']))
             if volatility > 0.6: recommendations.append(random.choice(source['volatility']))
         elif risk_level == 'medium':
-            recommendations.extend(random.sample(self.recommendation_templates['medium_risk']['generic'], 2))
+            # Prefer topic-based recs first; then fill with generic actions
+            pool = list(self.recommendation_templates['medium_risk']['generic'])
+            need = max(0, 2 - len(topic_recs))
+            if need > 0 and pool:
+                recommendations.extend(random.sample(pool, min(need, len(pool))))
         else:
+            # Pick 1 unique action
             recommendations.extend(random.sample(self.recommendation_templates['low_risk']['generic'], 1))
             
         # 3. Fillers
@@ -106,9 +93,18 @@ class RecommendationEngine:
                 'urgency': 'LOW'
             })
             
-        # Deduplicate
+        # Personalize reasons slightly with top trending topic (if available)
+        if trending_topics:
+            top_topic = trending_topics[0]['topic']
+            for rec in recommendations:
+                if top_topic.lower() not in rec.get('reason', '').lower():
+                    rec['reason'] = f"{rec.get('reason','')}. Observed topic: {top_topic}"
+
+        # Deduplicate based on Action Title
         unique = {rec['action']: rec for rec in recommendations}.values()
-        return list(unique)[:4]
+        out = list(unique)[:4]
+        logger.debug(f"Template recommendations output: {out}")
+        return out
 
     def _load_templates(self) -> Dict:
         """Robust backup templates"""
@@ -146,7 +142,6 @@ class RecommendationEngine:
         recs = []
         if not trending_topics: return recs
         
-        # Dynamic Topic Rules
         topic_map = {
             'fuel': {'action': 'Secure Fuel Reserves', 'reason': 'Fuel detected in trends', 'impact': 'Operational continuity', 'urgency': 'HIGH'},
             'dollar': {'action': 'Hedge Forex Exposure', 'reason': 'Currency fluctuation', 'impact': 'Protects financial position', 'urgency': 'HIGH'},

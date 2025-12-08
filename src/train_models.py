@@ -19,6 +19,7 @@ from models.anomaly_detector import HybridAnomalyDetector
 from models.risk_scorer import BayesianRiskScorer
 from models.sentiment_engine import SentimentAnalyzer
 from models.trend_analyzer import TrendAnalyzer
+from models.news_classifier import NewsClassifier
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -120,6 +121,60 @@ class ModelTrainingPipeline:
         model_path = MODELS_DIR / 'risk_scorer.pkl'
         joblib.dump(self.risk_scorer, model_path)
         logger.info(f"Saved model to {model_path}")
+
+    def train_news_classifier(self):
+        """Train a lightweight news-category classifier (TF-IDF + LogisticRegression)
+
+        Labels are generated using the rule-based `NewsClassifier` as weak labels.
+        This produces a simple, reproducible classifier for the ingestion pipeline.
+        """
+        logger.info("Training news classifier (TF-IDF + LogisticRegression)...")
+
+        news_path = RAW_DATA_DIR / 'historical_news.csv'
+        if not news_path.exists():
+            logger.warning(f"No historical news found at {news_path}; skipping news classifier training")
+            return None
+
+        import pandas as pd
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import Pipeline
+        import joblib
+
+        df = pd.read_csv(news_path)
+        if 'title' not in df.columns:
+            logger.warning("historical_news.csv missing 'title' column; skipping news classifier training")
+            return None
+
+        titles = df['title'].fillna('').astype(str).values
+
+        # Weak labels from rule-based classifier
+        weak_clf = NewsClassifier()
+        labels = [weak_clf.classify(t) for t in titles]
+
+        # Keep only most frequent classes to avoid extreme class imbalance
+        import collections
+        counter = collections.Counter(labels)
+        common = {c for c, _ in counter.most_common(10)}
+        filtered = [(t, l) for t, l in zip(titles, labels) if l in common]
+
+        if len(filtered) < 50:
+            logger.warning("Not enough labeled samples for news classifier; skipping")
+            return None
+
+        X, y = zip(*filtered)
+
+        pipeline = Pipeline([
+            ('tfidf', TfidfVectorizer(max_features=20000, ngram_range=(1,2))),
+            ('lr', LogisticRegression(max_iter=1000))
+        ])
+
+        pipeline.fit(X, y)
+
+        model_path = MODELS_DIR / 'news_classifier.pkl'
+        joblib.dump(pipeline, model_path)
+        logger.info(f"Saved news classifier to {model_path}")
+        return model_path
     
     def analyze_trends(self):
         """Analyze historical trends"""
@@ -176,6 +231,14 @@ class ModelTrainingPipeline:
                 }
             }
         }
+
+        # If a news classifier was trained and saved, include it in the report
+        news_path = MODELS_DIR / 'news_classifier.pkl'
+        if news_path.exists():
+            report['models']['news_classifier'] = {
+                'type': 'TF-IDF + LogisticRegression',
+                'saved_to': str(news_path)
+            }
         
         report_path = MODELS_DIR / 'training_report.json'
         with open(report_path, 'w') as f:
@@ -203,6 +266,14 @@ class ModelTrainingPipeline:
             
             # Step 4: Train risk scorer
             self.train_risk_scorer(anomaly_scores)
+
+            # Step 5: Train news classifier
+            try:
+                news_model_path = self.train_news_classifier()
+                if news_model_path:
+                    logger.info(f"News classifier trained and saved to {news_model_path}")
+            except Exception as e:
+                logger.warning(f"News classifier training failed: {e}")
             
             # Step 5: Analyze trends
             self.analyze_trends()
