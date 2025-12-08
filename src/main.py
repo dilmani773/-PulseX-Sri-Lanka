@@ -13,10 +13,12 @@ import pandas as pd
 import numpy as np
 from collections import Counter
 
-# Add src to path
-sys.path.append(str(Path(__file__).parent))
+# Ensure project root is on sys.path so `src.*` imports work when running
+# this module as a script (python src/main.py).
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import (
+from src.config import (
     DATA_CONFIG, MODEL_CONFIG, 
     RAW_DATA_DIR, PROCESSED_DATA_DIR, MODELS_DIR
 )
