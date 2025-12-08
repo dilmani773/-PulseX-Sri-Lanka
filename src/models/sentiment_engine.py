@@ -1,6 +1,7 @@
 """
 Multi-Lingual Sentiment Analysis Engine
-Optimized for MACRO-ECONOMIC Risk (Ignores domestic/personal crime)
+Strictly Optimized for BUSINESS & MACRO-ECONOMIC Risk
+Ignores personal crime, domestic incidents, and general police news.
 """
 
 import numpy as np
@@ -18,25 +19,30 @@ class SentimentAnalyzer:
             'develop', 'invest', 'deal', 'agree', 'partner', 'support', 'aid', 'relief',
             'good', 'great', 'success', 'win', 'safe', 'restor', 'happy', 'peace', 'benefit',
             'launch', 'open', 'start', 'commence', 'approve', 'bonus', 'award', 'help',
-            'resume', 'normal', 'stabil', 'medic', 'vaccin', 'touris'
+            'resume', 'normal', 'stabil', 'medic', 'vaccin', 'touris', 'arriv'
         ]
         
-        # NEGATIVE ROOTS (Focused on BUSINESS & MACRO Risks only)
-        # REMOVED: arrest, kill, death, murder, injury, accident (Too individual)
-        # KEPT: protest, strike, fuel, shortage, inflation, disaster (Systemic risks)
+        # NEGATIVE ROOTS (Strictly Business/Operational Risks)
+        # REMOVED: crime, arrest, police, jail, murder, kill, death, wound, injur, accident
+        # REASON: These are "Social Noise" that distract from Business Intelligence.
+        
         self.negative_roots = [
-            # Economic Shocks
+            # 1. Economic Instability
             'crisis', 'crash', 'collaps', 'drop', 'fall', 'decline', 'loss', 'los', 
             'debt', 'inflat', 'bankrupt', 'recess', 'short', 'scarc', 'lack', 'fail', 
+            'default', 'devalu', 'depreciat', 'downgrad',
+            
+            # 2. Market Sentiment
             'risk', 'threat', 'danger', 'warn', 'concern', 'worry', 'fear', 'panic',
-            'fraud', 'corrupt', 'bribe', 'scam', 'default',
+            'uncert', 'volat', 'unstable',
             
-            # Operational Disruptions (Strikes, Weather, Unrest)
-            'protest', 'strike', 'riot', 'violen', 'attack', 'conflict', 'fight', 'war', 
-            'damag', 'destroy', 'flood', 'landslid', 'disaster', 
-            'ban', 'suspend', 'clos', 'delay', 'outage', 'blackout',
+            # 3. Operational Disruptions (The things that stop work)
+            'protest', 'strike', 'riot', 'demonstrat', 'unrest', 'curfew', 'emergency',
+            'block', 'clos', 'shut', 'suspend', 'ban', 'halt', 'delay', 'cancel',
+            'outage', 'blackout', 'power-cut', 'breakdown',
             
-            # Health/Systemic
+            # 4. Disaster / Systemic
+            'disaster', 'flood', 'landslid', 'storm', 'cyclone', 'weather',
             'disease', 'outbreak', 'epidemic', 'virus', 'infect'
         ]
         
@@ -71,10 +77,10 @@ class SentimentAnalyzer:
         total_meaningful = pos_score + neg_score
         
         if total_meaningful == 0:
+            # If no business keywords found, it is Neutral
             return {'positive': 0.0, 'neutral': 1.0, 'negative': 0.0, 'compound': 0.0}
         
         raw_score = pos_score - neg_score
-        # Using 3.0 to keep the score gentle (less jumping to -0.9 instantly)
         compound = np.tanh(raw_score / 3.0)
         
         return {
